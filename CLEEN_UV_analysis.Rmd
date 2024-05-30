@@ -1,0 +1,242 @@
+---
+title: "UV Analysis"
+author: "Nicole White, Allen Cheng, Katrina Browne, Philip Russo, Andrew Stewardson, Maham Amin, Kirsty Graham, Jennie King, Peta Tehan, David Brain, Maria Northcote, Brett Mitchell"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,warning = FALSE, message = FALSE)
+source('code/99_packages.R')
+source('code/99_functions.R')
+load('data/analysis_ready_uv.rda')
+
+```
+
+# UV audit descriptive summary
+
+```{r, fig.cap='Observed cleaning performance by data collection period',fig.height=6,fig.width=10}
+plot_dat = dat_secondary %>% select(phase,ward,data_collection_period,n_audited,n_clean) 
+
+#A - data collection period
+plot_dat_1 = plot_dat %>% group_by(data_collection_period) %>% summarise(across(n_audited:n_clean,sum),.groups='drop') %>% 
+ mutate(prop=n_clean/n_audited,ci.low=pmax(0,prop+qnorm(0.025)*sqrt(prop*(1-prop)/n_audited)),ci.high=prop+qnorm(0.975)*sqrt(prop*(1-prop)/n_audited))
+
+g1_uv = plot_dat_1 %>% ggplot(aes(x=data_collection_period,y=prop,ymin=ci.low,ymax=ci.high))+geom_point(position=position_dodge(0.5))+geom_errorbar(width=0.5,position=position_dodge(0.5))+ expand_limits(y=c(0,1))+ scale_y_continuous('Observed proportion of cleaned equipment',breaks=seq(0,1,0.1))+scale_x_discrete('Data collection period')+g.theme+scale_color_manual(values=cbPalette)+theme(legend.title=element_blank())
+
+#B - relative to intervention exposure
+
+ad = filter(cluster_time_mapping,phase==1) %>% group_by(ward) %>% slice_min(data_collection_period) %>% ungroup() %>% select(ward,data_collection_period) %>% rename('int_start_period'=data_collection_period) %>% mutate_at('ward',~factor(.,levels=1:10))
+
+plot_dat_2 = plot_dat %>% left_join(ad,by='ward') %>% mutate_at('data_collection_period',~as.numeric(.)-int_start_period) %>% group_by(data_collection_period) %>% summarise(across(n_audited:n_clean,sum),.groups='drop') %>% 
+ mutate(prop=n_clean/n_audited,ci.low=pmax(0,prop+qnorm(0.025)*sqrt(prop*(1-prop)/n_audited)),ci.high=prop+qnorm(0.975)*sqrt(prop*(1-prop)/n_audited))
+
+g2_uv = plot_dat_2 %>% ggplot(aes(x=data_collection_period,y=prop,ymin=ci.low,ymax=ci.high))+geom_point(position=position_dodge(0.5))+geom_errorbar(width=0.5,position=position_dodge(0.5))+ geom_vline(aes(xintercept=0),linetype='dashed',colour='black') + expand_limits(y=c(0,1))+ scale_y_continuous('Observed proportion of cleaned equipment',breaks=seq(0,1,0.1))+scale_x_continuous('Data collection period, relative to first Intervention PPS',breaks=seq(-15,15,3))+g.theme+scale_color_manual(values=cbPalette)+theme(legend.title=element_blank())
+
+ggpubr::ggarrange(g1_uv,g2_uv,nrow=2,ncol=1,align='hv',common.legend = T,labels=LETTERS[1:2])
+
+
+```
+
+
+```{r desc-summary-uv-ward,fig.cap='Observed cleaning thoroughness by data collection period and ward',fig.width=16,fig.height=10}
+
+
+#A - data collection period
+plot_dat_1 = dat_secondary %>% 
+ mutate(prop=n_clean/n_audited,ci.low=pmax(0,prop+qnorm(0.025)*sqrt(prop*(1-prop)/n_audited)),ci.high=prop+qnorm(0.975)*sqrt(prop*(1-prop)/n_audited))
+
+g1 = plot_dat_1 %>% mutate_at('ward',~paste('Ward',.) %>% factor(.,levels=paste('Ward',1:10))) %>% ggplot(aes(x=data_collection_period,y=prop,ymin=ci.low,ymax=ci.high,group=ward))+geom_point(position=position_dodge(0.5))+geom_errorbar(width=0.5,position=position_dodge(0.5))+ expand_limits(y=c(0,1))+facet_wrap(~ward,nrow=5,ncol=2) +scale_y_continuous('Observed proportion of cleaned equipment',breaks=seq(0,1,0.2))+scale_x_discrete('Data collection period')+g.theme
+
+#B - relative to intervention exposure
+
+ad = filter(cluster_time_mapping,phase==1) %>% group_by(ward) %>% slice_min(data_collection_period) %>% ungroup() %>% select(ward,data_collection_period) %>% rename('int_start_period'=data_collection_period) %>% mutate_at('ward',~factor(.,levels=1:10))
+
+plot_dat_2 = dat_secondary %>% left_join(ad,by='ward') %>% mutate_at('data_collection_period',~as.numeric(.)-int_start_period) %>% 
+ mutate(prop=n_clean/n_audited,ci.low=pmax(0,prop+qnorm(0.025)*sqrt(prop*(1-prop)/n_audited)),ci.high=prop+qnorm(0.975)*sqrt(prop*(1-prop)/n_audited))
+
+g2 = plot_dat_2 %>% mutate_at('ward',~paste('Ward',.) %>% factor(.,levels=paste('Ward',1:10))) %>% ggplot(aes(x=data_collection_period,y=prop,ymin=ci.low,ymax=ci.high))+geom_point(position=position_dodge(0.5))+geom_errorbar(width=0.5,position=position_dodge(0.5))+ geom_vline(aes(xintercept=0),linetype='dashed',colour='black') + expand_limits(y=c(0,1))+ facet_wrap(~ward,nrow=5,ncol=2)+scale_y_continuous('Observed proportion of cleaned equipment',breaks=seq(0,1,0.2))+scale_x_continuous('Data collection period, relative to first Intervention PPS',breaks=seq(-16,16,4))+g.theme+scale_color_manual(values=cbPalette)+theme(legend.title=element_blank())
+
+
+ggpubr::ggarrange(g1,g2,nrow=1,ncol=2,align='hv',common.legend = T,labels=LETTERS[1:2])
+
+
+```
+
+
+```{r}
+
+ftab.uv_byward = dat %>% group_by(ward,phase) %>% summarise(n_audited = n(),n_clean=sum(cleaned),prop=sum(n_clean)/sum(n_audited),ci.low=pmax(0,prop+qnorm(0.025)*sqrt(prop*(1-prop)/sum(n_audited))),ci.high=prop+qnorm(0.975)*sqrt(prop*(1-prop)/sum(n_audited)),.groups='drop') %>% 
+  mutate_at(c('prop','ci.low','ci.high'),~roundz(100*.,1)) %>%
+    mutate(cell=paste0(prop,'\n(',ci.low,' to ',ci.high,')')) %>% select(phase,ward,n_audited,n_clean,cell) %>% rename('Total audits'=n_audited,'Total cleaned'=n_clean,'Thoroughness of cleaning (%) (95% CI)'=cell) %>% pivot_wider(names_from='phase',values_from = c('Total audits','Total cleaned','Thoroughness of cleaning (%) (95% CI)'),names_sep = ': ') %>% select(ward,ends_with('Control'),ends_with('Intervention')) %>% mutate_at('ward',~paste('Ward',.))
+
+
+ftab.uv_allwards =  dat %>% group_by(phase) %>% summarise(n_audited = n(),n_clean=sum(cleaned),prop=sum(n_clean)/sum(n_audited),ci.low=pmax(0,prop+qnorm(0.025)*sqrt(prop*(1-prop)/sum(n_audited))),ci.high=prop+qnorm(0.975)*sqrt(prop*(1-prop)/sum(n_audited)),.groups='drop') %>% 
+  mutate_at(c('prop','ci.low','ci.high'),~roundz(100*.,1)) %>%
+    mutate(cell=paste0(prop,'\n(',ci.low,' to ',ci.high,')')) %>% select(phase,n_audited,n_clean,cell) %>% rename('Total audits'=n_audited,'Total cleaned'=n_clean,'Thoroughness of cleaning (%) (95% CI)'=cell) %>% pivot_wider(names_from='phase',values_from = c('Total audits','Total cleaned','Thoroughness of cleaning (%) (95% CI)'),names_sep = ': ') %>% select(ends_with('Control'),ends_with('Intervention')) %>% add_column('ward'='All wards',.before=1)
+
+
+ftab.uv_byward = bind_rows(ftab.uv_byward,ftab.uv_allwards)
+
+ftab.header= data.frame(out=names(ftab.uv_byward)) %>% mutate_at('out',~ifelse(.=='ward','Ward: Study period',.)) %>% separate(out,into=c('a','b'),sep=': ',remove=F)
+
+
+ftab.uv_byward %>% flextable()  %>% width(width=c(1,1,1,1.1,1,1,1.1)) %>% fontsize(size=9,part='all') %>% set_header_df(mapping=ftab.header,key="out") %>% theme_box() %>% merge_v(part='header') %>% merge_h(part="header") %>% align(align='center',part='all') %>% set_caption('Table: Audit statistics by ward: Control versus Intervention')
+```
+
+
+```{r}
+#by type of equipment
+ftab.uv_bytype = filter(dat,!is.na(type_of_equipment_audited)) %>% group_by(type_of_equipment_audited,phase) %>% summarise(n_audited = n(),n_clean = sum(cleaned),prop=sum(n_clean)/sum(n_audited),ci.low=pmax(0,prop+qnorm(0.025)*sqrt(prop*(1-prop)/sum(n_audited))),ci.high=prop+qnorm(0.975)*sqrt(prop*(1-prop)/sum(n_audited)),.groups='drop') %>% 
+  mutate_at(c('prop','ci.low','ci.high'),~roundz(100*.,1)) %>%
+    mutate(cell=paste0(prop,'\n(',ci.low,' to ',ci.high,')')) %>% select(phase,type_of_equipment_audited,n_audited,n_clean,cell) %>% rename('Total audits'=n_audited,'Total cleaned'=n_clean,'Thoroughness of cleaning (%) (95% CI)'=cell) %>% pivot_wider(names_from='phase',values_from = c('Total audits','Total cleaned','Thoroughness of cleaning (%) (95% CI)'),names_sep = ': ') %>% select(type_of_equipment_audited,ends_with('Control'),ends_with('Intervention')) %>% 
+  mutate_at('type_of_equipment_audited',~case_match(.,1~'Bladder scanner',2~'Blood testing kit',3~'Commode',4~'Computer on wheels',6~'Infusion pump',7~'Intravenous stand/pole',8~'Medication trolley',9~'Blood pressure monitor',10~'Mobility equipment',12~'Patslide',13~'Resuscitation trolley',15~'Metal trolley'))
+
+ftab.uv_bytype %>% flextable()  %>% width(width=c(1,0.8,0.8,1.1,0.8,0.8,1.1)) %>% fontsize(size=9,part='all') %>% set_header_df(mapping=ftab.header,key="out") %>% theme_box() %>% merge_v(part='header') %>% merge_h(part="header") %>% align(align='center',part='all') %>% set_caption('Table: Audit statistics by equipment type: Control versus Intervention')
+
+```
+
+
+# Secondary outcome analysis
+
+```{r}
+load('output/bootstrap_secondary_outcome.rda')
+
+ftab_all = NULL
+ftab_all[['Binary']] = mod_uv_binary$ftab.mod %>% add_column('AIC'=mod_uv_binary$aic.mod)
+ftab_all[['Linear']] = mod_uv_linear$ftab.mod %>% add_column('AIC'=mod_uv_linear$aic.mod)
+ftab_all[['Binary + Linear']] = mod_uv_binary_linear$ftab.mod %>% add_column('AIC'=mod_uv_binary_linear$aic.mod)
+
+ftab_all = bind_rows(ftab_all,.id='Intervention fixed effect') %>% filter(Parameter!='Intercept') %>% select(`Intervention fixed effect`,Parameter,`OR (95% CI)`,`p-value`,AIC) %>% rename('Odds ratio (95% CI)'=`OR (95% CI)`)
+
+ftab_all %>% flextable() %>% merge_v(j=c('Intervention fixed effect','AIC')) %>% theme_box() %>% width(width=c(1.5,2,1.5,1.8,0.8)) %>% set_caption('Table: Estimated odds ratios (OR): Intervention exposure.')
+
+#add logLik
+ll = NULL
+ll[['Binary']] = roundz(summary(mod_uv_binary$mod.fit)$AICtab['logLik'],1)
+ll[['Linear']] = roundz(summary(mod_uv_linear$mod.fit)$AICtab['logLik'],1)
+ll[['Binary + Linear']] = roundz(summary(mod_uv_binary_linear$mod.fit)$AICtab['logLik'],1)
+
+ll = bind_rows(ll) %>% gather(Outcome,logLik)
+
+ftab_all = ftab_all %>% left_join(ll,by=c(`Intervention fixed effect`='Outcome'))
+
+
+
+```
+
+```{r}
+#use bootstrapped output here
+pdat_uv <- NULL
+pdat_uv[['Binary']] = mod_uv_binary$newdat %>% add_column(pred=apply(mod_uv_binary$boot_output[,1:nrow(mod_uv_binary$newdat)],2,function(.) mean(.)),
+                                                                   conf.low = apply(mod_uv_binary$boot_output[,1:nrow(mod_uv_binary$newdat)],2,function(.) quantile(.,0.025)),
+                                                                   conf.high = apply(mod_uv_binary$boot_output[,1:nrow(mod_uv_binary$newdat)],2,function(.) quantile(.,0.975))) 
+
+pdat_uv[['Linear']] = mod_uv_linear$newdat %>% add_column(pred=apply(mod_uv_linear$boot_output[,1:nrow(mod_uv_linear$newdat)],2,function(.) mean(.)),
+                                                                   conf.low = apply(mod_uv_linear$boot_output[,1:nrow(mod_uv_linear$newdat)],2,function(.) quantile(.,0.025)),
+                                                                   conf.high = apply(mod_uv_linear$boot_output[,1:nrow(mod_uv_linear$newdat)],2,function(.) quantile(.,0.975))) 
+
+
+pdat_uv[['Binary + Linear']] = mod_uv_binary_linear$newdat %>% add_column(pred=apply(mod_uv_binary_linear$boot_output[,1:nrow(mod_uv_binary_linear$newdat)],2,function(.) mean(.)),
+                                                                   conf.low = apply(mod_uv_binary_linear$boot_output[,1:nrow(mod_uv_binary_linear$newdat)],2,function(.) quantile(.,0.025)),
+                                                                   conf.high = apply(mod_uv_binary_linear$boot_output[,1:nrow(mod_uv_binary_linear$newdat)],2,function(.) quantile(.,0.975))) 
+
+pdat_uv = bind_rows(pdat_uv,.id='Intervention fixed effect')
+
+
+#table - filter out control:0weeks
+ftab_uv_pred = filter(pdat_uv,(phase==0 & time_label<0)|phase==1) %>% mutate(cell=paste0(roundz(100*pred,2),'\n(',roundz(100*conf.low,2),' to ',roundz(100*conf.high,2),')')) %>%
+  select(`Intervention fixed effect`,time_label,time_since_intervention,cell) %>% filter(time_label!=-0.001) %>% mutate_at('time_label',~case_when(. <0 ~ paste('Control:',abs(.),'weeks before intervention exposure'),. %in% 0:12 ~ paste('Intervention:',.,'weeks after intervention exposure')) %>% factor(.,levels=c(paste('Control:',seq(12,2,-2),'weeks before intervention exposure'),paste('Intervention:',seq(0,12,2),'weeks after intervention exposure')))) %>% spread(`Intervention fixed effect`,cell) %>% select(time_label,Binary,Linear,`Binary + Linear`) %>%
+  separate(col=time_label,into=c('Study phase','Time point'),sep=': ')
+
+
+flextable(ftab_uv_pred) %>% merge_v(j=c('Study phase','Binary','Linear','Binary + Linear')) %>% theme_box() %>% fontsize(size=10,part='all') %>% width(width=c(1,2.75,1.1,1.1,1.1)) %>% set_caption('Predicted cleaning thoroughness by study phase for fortnightly audits (+2 weeks)')
+
+```
+
+```{r,fig.cap='Predicted cleaning performance in week since intervention exposure, for different specficiations of intervention effect (Binary, Linear, Binary+Linear)',fig.height=10,fig.width=10}
+
+ggplot(pdat_uv,aes(x=time_label,y=100*pred,ymin=100*conf.low,ymax=100*conf.high,group=`Intervention fixed effect`,colour=`Intervention fixed effect`,fill=`Intervention fixed effect`))+geom_ribbon(alpha=.3)+geom_point()+geom_vline(aes(xintercept=0),linetype='dashed',colour='grey')+geom_line()+expand_limits(y=c(0,100))+scale_x_continuous('Time since intervention exposure, weeks',breaks=seq(-12,12,2))+scale_y_continuous('Predicted % equipment clean: Estimate (95% CI)',breaks=seq(0,100,10))+scale_fill_manual(values=cbPalette)+scale_colour_manual(values=cbPalette)+g.theme
+```
+
+
+```{r fig.cap='Ward random effects: Binary + Linear model',fig.height=10,fig.width=10}
+random_effect = mod_uv_binary_linear$rtab.mod %>% mutate_at('ward',~factor(.,levels=1:10))
+
+ggplot(random_effect,aes(x=condval,xmin=conf.low,xmax=conf.high,y=ward))+geom_point(position = position_dodge(.4))+geom_errorbar(width=.5,position = position_dodge(.4))+ geom_vline(aes(xintercept=0),linetype='dashed') +expand_limits(x=c(-1,1)) + scale_y_discrete('Ward')+scale_x_continuous('Random effect: Estimate (95% CI)',breaks=seq(-1,1,0.2))+g.theme+
+  annotate('text',x=c(-0.7,0.7),y=c(1,1),label=c('Lower than\nbaseline average','Higher than\nbaseline average'))
+
+
+```
+
+## Sensitivity analysis
+
+### Leave one ward out analysis
+
+```{r ,fig.cap = 'Leave one ward out analysis, Binary + Linear intervention effect. Odds ratios for intervention exposure are given for each excluded ward.',fig.height=8,fig.width=8}
+
+ad = filter(cluster_time_mapping,phase==1) %>% group_by(ward) %>% slice_min(data_collection_period) %>% ungroup() %>% select(ward,data_collection_period) %>% rename('int_start_period'=data_collection_period) %>% mutate_at('ward',~factor(.,levels=1:10))
+dat_secondary = dat_secondary %>% left_join(ad,by='ward') %>% mutate('time_since_intervention'=as.numeric(data_collection_period)-int_start_period)
+
+
+dat_secondary = dat_secondary %>% mutate_at('time_since_intervention',~pmax(0,.))
+
+mod_loo = lapply(1:10,function(x) fit_glmm_uv(indat = filter(dat_secondary,ward!=x),mod.form='~(1|ward)+data_collection_period+phase+time_since_intervention'))
+ftab_loo = lapply(mod_loo,function(x) x$ftab.mod) %>% bind_rows(.id='Ward excluded') %>% filter(Parameter!='Intercept') 
+ftab_loo %>% flextable() %>% merge_v(j = "Ward excluded") %>% theme_box() %>% width(width=c(1,2,1.8,2,1)) %>% set_caption('Leave one ward out analysis: Binary + Linear. Odds ratios for intervention exposure are given for each excluded ward.')
+
+plot_loo = ftab_loo %>% mutate(est=str_remove_all(`OR (95% CI)`,pattern='\\s+\\(.*$'),ci95=str_remove_all(`OR (95% CI)`,'^.*\\(|\\)')) %>% separate(ci95,into=c('ci.low','ci.high'),sep=' to ') %>% select(`Ward excluded`,Parameter,est,ci.low,ci.high) %>% mutate_at('Ward excluded',~factor(.,levels=1:10)) %>% mutate_at(c('est','ci.low','ci.high'),~as.numeric(.))
+
+ggplot(plot_loo,aes(x=est,xmin=ci.low,xmax=ci.high,y=`Ward excluded`))+geom_point()+geom_errorbar(width=0.2)+facet_wrap(~Parameter,nrow=2,ncol=1,scales='free')+geom_vline(aes(xintercept=1),linetype='dashed',colour='grey')+
+  scale_x_continuous('Odds ratio (95% CI)')+theme_bw()+g.theme
+
+```
+
+```{r fig.cap = 'Leave one ward out analysis, Binary + Linear intervention effect. Odds ratios for intervention exposure are given for each excluded ward.',fig.height=8,fig.width=8}
+mod_loo = lapply(1:10,function(x) fit_glmm_uv(indat = filter(dat_secondary,ward!=x),mod.form='~(1|ward)+data_collection_period+phase'))
+ftab_loo = lapply(mod_loo,function(x) x$ftab.mod) %>% bind_rows(.id='Ward excluded') %>% filter(Parameter!='Intercept') 
+ftab_loo %>% flextable() %>% merge_v(j = "Parameter") %>% theme_box() %>% width(width=c(1,2,1.8,2,1)) %>% set_caption('Leave one ward out analysis: Binary. Odds ratios for intervention exposure are given for each excluded ward.')
+
+plot_loo = ftab_loo %>% mutate(est=str_remove_all(`OR (95% CI)`,pattern='\\s+\\(.*$'),ci95=str_remove_all(`OR (95% CI)`,'^.*\\(|\\)')) %>% separate(ci95,into=c('ci.low','ci.high'),sep=' to ') %>% select(`Ward excluded`,Parameter,est,ci.low,ci.high) %>% mutate_at('Ward excluded',~factor(.,levels=1:10)) %>% mutate_at(c('est','ci.low','ci.high'),~as.numeric(.))
+
+ggplot(plot_loo,aes(x=est,xmin=ci.low,xmax=ci.high,y=`Ward excluded`))+geom_point()+geom_errorbar(width=0.2)+facet_wrap(~Parameter,nrow=2,ncol=1,scales='free')+geom_vline(aes(xintercept=1),linetype='dashed',colour='grey')+
+  scale_x_continuous('Odds ratio (95% CI)')+theme_bw()+g.theme
+
+```
+
+### Assessing overdispersion
+
+Overdispersion was examined by adding an extra random effect per ward/audit occasion. The next table shows fixed effects estimates and AIC results after accounting for overdispersion.
+
+```{r}
+dat_secondary = dat_secondary %>% mutate(idx=row_number())
+mod.fit_binary_o = fit_glmm_uv(mod.form='~(1|ward)+(1|idx)+data_collection_period+phase')
+mod.fit_linear_o = fit_glmm_uv(mod.form='~(1|ward)+(1|idx)+data_collection_period+time_since_intervention')
+mod.fit_binary_linear_o = fit_glmm_uv(mod.form='~(1|ward)+(1|idx)+data_collection_period+phase+time_since_intervention')
+
+ftab_all_1 = NULL
+ftab_all_1[['Binary']] = mod.fit_binary_o$ftab.mod 
+ftab_all_1[['Linear']] = mod.fit_linear_o$ftab.mod 
+ftab_all_1[['Binary + Linear']] = mod.fit_binary_linear_o$ftab.mod 
+ftab_all_1 = bind_rows(ftab_all_1,.id='Intervention fixed effect') %>% filter(Parameter!='Intercept') %>% select(`Intervention fixed effect`,Parameter,`OR (95% CI)`,`p-value`) %>% rename('Odds ratio (95% CI)'=`OR (95% CI)`)
+
+
+
+#add logLik
+ll = NULL
+ll[['Binary']] = roundz(summary(mod.fit_binary_o$mod.fit)$AICtab['logLik'],1)
+ll[['Linear']] = roundz(summary(mod.fit_linear_o$mod.fit)$AICtab['logLik'],1)
+ll[['Binary + Linear']] = roundz(summary(mod.fit_binary_linear_o$mod.fit)$AICtab['logLik'],1)
+
+ll = bind_rows(ll) %>% gather(Outcome,logLik)
+
+ftab_all_1 = ftab_all_1 %>% left_join(ll,by=c(`Intervention fixed effect`='Outcome'))
+
+ftab_all = bind_rows(list('Main analysis'=ftab_all,'Overdispersion'=ftab_all_1),.id='Analysis') %>% select(`Intervention fixed effect`,Analysis,Parameter,`Odds ratio (95% CI)`,`p-value`,logLik) %>% 
+  mutate_at('Intervention fixed effect',~factor(.,levels=c('Binary','Linear','Binary + Linear'))) %>%
+  arrange(`Intervention fixed effect`,Analysis,Parameter)
+
+
+ftab_all %>% flextable() %>% merge_v(j=c('Intervention fixed effect','logLik')) %>% theme_box() %>% width(width=c(1.5,1.5,2,1.5,1.8,0.8)) %>% set_caption('Table: Estimated odds ratios (OR): Intervention exposure after accounting for possible overdispersion.')
+
+
+```

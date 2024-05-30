@@ -1,0 +1,519 @@
+---
+title: "HAI Analysis"
+author: "Nicole White, Allen Cheng, Katrina Browne, Philip Russo, Andrew Stewardson, Maham Amin, Kirsty Graham, Jennie King, Peta Tehan, David Brain, Maria Northcote, Brett Mitchell"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,warning = FALSE, message = FALSE, dev = "png",dpi = 600,cache = TRUE,tab.cap.style = "Table Caption")
+source('code/99_packages.R')
+source('code/99_functions.R')
+load('data/analysis_ready_hai.rda')
+
+```
+
+HAI results in accordance with the Statistical Analysis Plan https://doi.org/10.1101/2023.12.20.23300169
+
+# Study design
+
+```{r,fig.cap='Observed treatment sequences by trial ward',fig.height=8,fig.width=8}
+cluster_ward_mapping = tibble(cluster=rep(1:5,each=2),ward=c(3,7,1,5,2,4,9,10,6,8),anon_label = LETTERS[1:10])
+
+to_plot = cluster_time_mapping %>% arrange(cluster,ward) %>% mutate_at('ward',~factor(.,levels=rev(unique(cluster_ward_mapping[['ward']])))) %>%
+  mutate_at('phase',~case_when(.==0~'Control',.==1~'Intervention'))
+
+ggplot(to_plot,aes(x=data_collection_period,y=ward,fill=phase))+geom_tile(colour='black')+
+  scale_x_continuous('Data collection period',breaks=1:18,limits=c(0,18.5),expand=c(0,NA))+scale_y_discrete('Ward')+scale_fill_manual(values=c('#A9D08E','#9BC2E6'))+
+  theme_minimal()+theme(legend.title=element_blank(),legend.position='top',legend.text=element_text(size=12),axis.text = element_text(size=12),text=element_text(size=12),panel.grid.minor = element_blank())
+```
+
+
+# Cohort characteristics
+
+```{r,warning=F}
+#baseline characteristic - count each participant once based on 
+dat_base =  distinct(dat,i_record_id,.keep_all = T) %>% mutate_at('hai_flag',~factor(.,levels=c('Patients without HAI','Patients with HAI'),labels=c('Patients without HAI','Patients with 1+ HAI')))
+
+## by hai flag first
+#patient characteristics
+ftab.desc = NULL
+ftab.desc[['Gender']] = make_cat_tab_row(indata=dat_base,invar='gender',choose.level = 'all',grouped=T,group_var='hai_flag',label='Patient characteristics')
+ftab.desc[['Age, years']] = make_cont_tab_row(indata=dat_base,invar='age',grouped=T,group_var='hai_flag',label='Patient characteristics')
+ftab.desc[['Emergency Admission']] = make_cat_tab_row(indata=dat_base,invar='admission_type',choose.level = 'Emergency',grouped=T,group_var='hai_flag',label='Patient characteristics')
+ftab.desc[['Surgical Admission']] = NULL
+ftab.desc[['Current colonisation or infection with multi-resistant organism']] = make_cat_tab_row(indata=dat_base,invar='does_the_patient_have_an_active_alert_for_a_multidrug_resistant',choose.level = 'Yes',grouped=T,group_var='hai_flag',label='Patient characteristics')
+ftab.desc[['Ward length of stay prior to PPS']] = make_cont_tab_row(indata=dat_base,invar='los_before_pps',grouped=T,group_var='hai_flag',label='Patient characteristics')
+ftab.desc[['Receiving antimicrobial therapy ']] = NULL
+ftab.desc[['Documented Fever >38 in previous 24 hours']] = NULL
+
+ftab.desc[['Peripheral vascular access device present']] = make_cat_tab_row(indata=dat_base,invar='peripheral_vascular_access_device_present',choose.level = 'Yes',grouped=T,group_var='hai_flag',label='Exposure')
+ftab.desc[['Central vascular access device present']] = make_cat_tab_row(indata=dat_base,invar='central_vascular_access_device_present',choose.level = 'Yes',grouped=T,group_var='hai_flag',label='Exposure')
+ftab.desc[['Indwelling urinary catheter present']] = make_cat_tab_row(indata=dat_base,invar='indwelling_urinary_catheter_present',choose.level = 'Yes',grouped=T,group_var='hai_flag',label='Exposure')
+ftab.desc[['Ventilated']] = make_cat_tab_row(indata=dat_base,invar='undergoing_ventilation',choose.level = 'Yes',grouped=T,group_var='hai_flag',label='Exposure')
+ftab.desc[['Documented fever in the last 24 hours']] = make_cat_tab_row(indata=dat_base,invar = 'documented_fever_38c_in_last_24_hours',choose.level = 'Yes',grouped=T,group_var='hai_flag',label='Exposure')
+ftab.desc[['Receiving antimicrobial therapy excluding surgical prophylaxis']] = make_cat_tab_row(indata=dat_base,invar = 'receiving_antimicrobial_therapy_excluding_surgical_prophylaxis',choose.level = 'Yes',grouped=T,group_var='hai_flag',label='Exposure')
+
+ftab.desc[['Ward specialty']] = make_cat_tab_row(indata=dat_base,invar='ward_specialty',choose.level = 'all',grouped=T,group_var='hai_flag',label='Medical specialty')
+
+ftab.desc_hai_flag = bind_rows(ftab.desc,.id='Characteristic') %>% mutate_at('Characteristic',~ifelse(!is.na(level),paste0(.,': ',level),.)) %>% select(Characteristic,`All patients`,`Patients without HAI`,`Patients with 1+ HAI`)
+
+## by control and intervention
+ftab.desc = NULL
+ftab.desc[['Gender']] = make_cat_tab_row(indata=dat_base,invar='gender',choose.level = 'all',grouped=T,group_var='phase',label='Patient characteristics')
+ftab.desc[['Age, years']] = make_cont_tab_row(indata=dat_base,invar='age',grouped=T,group_var='phase',label='Patient characteristics')
+ftab.desc[['Emergency Admission']] = make_cat_tab_row(indata=dat_base,invar='admission_type',choose.level = 'Emergency',grouped=T,group_var='phase',label='Patient characteristics')
+ftab.desc[['Current colonisation or infection with multi-resistant organism']] = make_cat_tab_row(indata=dat_base,invar='does_the_patient_have_an_active_alert_for_a_multidrug_resistant',choose.level = 'Yes',grouped=T,group_var='phase',label='Patient characteristics')
+ftab.desc[['Ward length of stay prior to PPS']] = make_cont_tab_row(indata=dat_base,invar='los_before_pps',grouped=T,group_var='phase',label='Patient characteristics')
+ftab.desc[['Peripheral vascular access device present']] = make_cat_tab_row(indata=dat_base,invar='peripheral_vascular_access_device_present',choose.level = 'Yes',grouped=T,group_var='phase',label='Exposure')
+ftab.desc[['Central vascular access device present']] = make_cat_tab_row(indata=dat_base,invar='central_vascular_access_device_present',choose.level = 'Yes',grouped=T,group_var='phase',label='Exposure')
+ftab.desc[['Indwelling urinary catheter present']] = make_cat_tab_row(indata=dat_base,invar='indwelling_urinary_catheter_present',choose.level = 'Yes',grouped=T,group_var='phase',label='Exposure')
+ftab.desc[['Ventilated']] = make_cat_tab_row(indata=dat_base,invar='undergoing_ventilation',choose.level = 'Yes',grouped=T,group_var='phase',label='Exposure')
+ftab.desc[['Documented fever in the last 24 hours']] = make_cat_tab_row(indata=dat_base,invar = 'documented_fever_38c_in_last_24_hours',choose.level = 'Yes',grouped=T,group_var='phase',label='Exposure')
+ftab.desc[['Receiving antimicrobial therapy excluding surgical prophylaxis']] = make_cat_tab_row(indata=dat_base,invar = 'receiving_antimicrobial_therapy_excluding_surgical_prophylaxis',choose.level = 'Yes',grouped=T,group_var='phase',label='Exposure')
+
+ftab.desc[['Ward specialty']] = make_cat_tab_row(indata=dat_base,invar='ward_specialty',choose.level = 'all',grouped=T,group_var='phase',label='Medical specialty')
+
+
+ftab.desc_phase = bind_rows(ftab.desc,.id='Characteristic') %>% mutate_at('Characteristic',~ifelse(!is.na(level),paste0(.,': ',level),.)) %>% select(Characteristic,`Control`,`Intervention`)
+
+#combine 
+ftab.desc <- inner_join(ftab.desc_hai_flag,ftab.desc_phase,by='Characteristic')
+
+#print table
+ftab.desc %>% flextable() %>% theme_box() %>% fontsize(size=9,part='all') %>%  width(width=c(1.6,1.3,1.2,1.2,1.2,1.2)) %>% set_caption('Baseline characteristics for all patients, and stratified by HAI acquisition and trial phase. The group "Patients with 1+ HAI" refers to patients with one or more confimed HAIs from the same PPS')
+
+```
+
+```{r,fig.cap='Number and proportion of patients under transmission based precautions',fig.width=10,fig.height=10}
+dat.mro = dat %>% group_by(ward,phase,data_collection_period) %>% summarise(n_mro=sum(does_the_patient_have_an_active_alert_for_a_multidrug_resistant=='Yes'),perc_mro = 100*mean(does_the_patient_have_an_active_alert_for_a_multidrug_resistant=='Yes'),.groups='drop') %>%
+  mutate_at('ward',~paste('Ward',.) %>% factor(.,levels=paste('Ward',1:10))) 
+
+
+ggplot(dat.mro,aes(x=data_collection_period,y=perc_mro,group=ward,colour=phase))+geom_line()+geom_point()+facet_wrap(~ward,nrow=5,ncol=2)+scale_x_continuous('Data collection period',breaks=1:18)+scale_y_continuous('% Transmission based precautions',breaks=seq(0,40,5))+scale_colour_manual(values=c('#CCCCCC','#000000'))+g.theme+theme(strip.background = element_rect(fill='white'))
+
+
+```
+
+# HAI descriptive summary
+
+```{r}
+#number of HAIS - control vs intervention
+## use dat to include patients with HAI onset in both study phases 
+ftab.desc = make_cat_tab_row(indata=filter(dat,total_hai_all>0),invar='total_hai_all',choose.level = 'all',grouped=T,group_var='phase',label='Exposure')
+#override all column to avoid double counting
+ad = filter(dat,total_hai_all>0) %>% reframe('level'=sum(total_hai_all),.by=i_record_id) %>% count(level,name='All patients') %>% mutate_at('All patients',~paste0(.,' (',roundz(100*./sum(.),1),'%)')) %>% mutate_at('level',~as.character(.))
+
+ftab.desc = inner_join(ad,select(ftab.desc,level,Control,Intervention),by='level')
+
+ftab.desc %>% mutate('Number HAIs'=case_match(level,'1'~'One HAI','2'~'Two HAIs','3'~'Three HAIs','4'~'Four HAIs','5'~'Five HAIs')) %>% select(`Number HAIs`,`All patients`,Control,Intervention) %>% flextable() %>% theme_box() %>% fontsize(size=9,part='all') %>%  width(width=c(1.2,1.2,1.2,1.2)) %>% set_caption('Observed number of HAIs by study period, for patients with one or more confimed HAIs')
+
+```
+
+
+```{r, fig.cap='Observed HAI prevalence by data collection period',fig.height=8,fig.width=10}
+#panels A and B - PPS prevalence
+plot_dat = dat_primary %>% select(phase,ward,data_collection_period,n_surveys,total_hai_all,total_hai_all_no_eent,total_hai_all_no_covid,total_hai_bsi_pn_uti_ssi) 
+
+
+#A - data collection period
+plot_dat_1 = plot_dat %>% group_by(data_collection_period) %>% summarise(across(n_surveys:total_hai_bsi_pn_uti_ssi,sum),.groups='drop') %>% 
+  pivot_longer(cols = c(total_hai_all,total_hai_all_no_eent,total_hai_all_no_covid,total_hai_bsi_pn_uti_ssi)) %>% mutate(prop=value/n_surveys,ci.low=pmax(0,prop+qnorm(0.025)*sqrt(prop*(1-prop)/n_surveys)),ci.high=prop+qnorm(0.975)*sqrt(prop*(1-prop)/n_surveys)) %>% mutate('hai_group'=case_when(name=='total_hai_all'~ 'All HAIs',name=='total_hai_all_no_eent'~'All HAIs excluding EENT',name=='total_hai_all_no_covid'~'All HAIs excluding COVID-19',name=='total_hai_bsi_pn_uti_ssi'~'BSI,PN,UTI and SSI'))
+
+g1_hai = plot_dat_1 %>% ggplot(aes(x=data_collection_period,y=prop,ymin=ci.low,ymax=ci.high,group=name,color=hai_group))+geom_point(position=position_dodge(0.5))+geom_errorbar(width=0.5,position=position_dodge(0.5))+ expand_limits(y=c(0,0.35))+ scale_y_continuous('Observed HAI prevalence',breaks=seq(0,0.40,0.05))+scale_x_discrete('Data collection period')+g.theme+scale_color_manual(values=cbPalette)+theme(legend.title=element_blank())
+
+#B - relative to intervention exposure
+
+ad = filter(cluster_time_mapping,phase==1) %>% group_by(ward) %>% slice_min(data_collection_period) %>% ungroup() %>% select(ward,data_collection_period) %>% rename('int_start_period'=data_collection_period) %>% mutate_at('ward',~factor(.,levels=1:10))
+
+plot_dat_2 = plot_dat %>% left_join(ad,by='ward') %>% mutate_at('data_collection_period',~as.numeric(.)-int_start_period) %>% group_by(data_collection_period) %>% summarise(across(n_surveys:total_hai_bsi_pn_uti_ssi,sum),.groups='drop') %>% 
+  pivot_longer(cols = c(total_hai_all,total_hai_all_no_eent,total_hai_all_no_covid,total_hai_bsi_pn_uti_ssi)) %>% mutate(prop=value/n_surveys,ci.low=pmax(0,prop+qnorm(0.025)*sqrt(prop*(1-prop)/n_surveys)),ci.high=prop+qnorm(0.975)*sqrt(prop*(1-prop)/n_surveys)) %>% mutate('hai_group'=case_when(name=='total_hai_all'~ 'All HAIs',name=='total_hai_all_no_eent'~ 'All HAIs excluding EENT',name=='total_hai_all_no_covid'~'All HAIs excluding COVID-19',name=='total_hai_bsi_pn_uti_ssi'~'BSI,PN,UTI and SSI'))
+
+g2_hai = plot_dat_2 %>% ggplot(aes(x=data_collection_period,y=prop,ymin=ci.low,ymax=ci.high,group=name,color=hai_group))+geom_point(position=position_dodge(0.5))+geom_errorbar(width=0.5,position=position_dodge(0.5))+geom_vline(aes(xintercept=0),linetype='dashed',colour='black') + expand_limits(y=c(0,0.35))+ scale_y_continuous('Observed HAI prevalence',breaks=seq(0,0.40,0.05))+scale_x_continuous('Data collection period, relative to first Intervention PPS',breaks=seq(-15,15,3))+g.theme+scale_color_manual(values=cbPalette)+theme(legend.title=element_blank())+annotate('text',x=c(-7.5,7.5),y=c(.32,.32),label=c('Control','Intervention'),size=6)
+
+ggpubr::ggarrange(g1_hai,g2_hai,nrow=2,ncol=1,align='hv',common.legend = T,labels=LETTERS[1:2])
+
+
+```
+
+```{r}
+
+#for each table row, summary total patients/admissions, total confirmed HAI, proportion with 95% CI
+hai_desc_summary <- function(indat=dat,invar='ward',choose.level=1,outcome='total_hai_all',dps=2){
+  #get total admissions
+  totals = filter(indat,get(invar) %in% choose.level) %>% group_by(phase) %>% summarise(n_pat = length(unique(i_record_id)),n_hai = sum(get(outcome))) %>% ungroup()
+  #add proportion and 95% CI
+  totals = totals %>% mutate(prop = n_hai/n_pat,ci.low=pmax(0,prop+qnorm(0.025)*sqrt(prop*(1-prop)/n_pat)),ci.high=prop+qnorm(0.975)*sqrt(prop*(1-prop)/n_pat)) %>%
+    mutate_at(c('n_pat','n_hai'),~format(.,big.mark=',',trim=T)) %>% mutate_at(c('prop','ci.low','ci.high'),~roundz(100*.,dps)) %>%
+    mutate(cell=paste0(prop,'\n(',ci.low,' to ',ci.high,')')) %>% select(phase,n_pat,n_hai,cell) %>% rename('Total Patients'=n_pat,'Total confirmed HAI'=n_hai,'HAI prevalence (%) (95% CI)'=cell) 
+  totals = totals %>% pivot_wider(names_from='phase',values_from = c('Total Patients','Total confirmed HAI','HAI prevalence (%) (95% CI)'),names_sep = ': ') %>% select(ends_with('Control'),ends_with('Intervention'))
+  
+  return(totals)
+}
+
+
+ftab.hai_byward = lapply(1:10, function(x) hai_desc_summary(invar='ward',choose.level=x)) %>% bind_rows(.id='Ward') %>% mutate_at('Ward',~paste('Ward',.))
+ftab.hai_allwards = hai_desc_summary(invar='ward',choose.level=1:10) %>% add_column('Ward'='All wards',.before=1)
+
+
+ftab.hai_byward = bind_rows(ftab.hai_byward,ftab.hai_allwards)
+
+
+ftab.header= data.frame(out=names(ftab.hai_byward)) %>% mutate_at('out',~ifelse(.=='Ward','Ward: Study period',.)) %>% separate(out,into=c('a','b'),sep=': ',remove=F)
+
+
+ftab.hai_byward %>% flextable()  %>% width(width=c(1,1,1,1.1,1,1,1.1)) %>% fontsize(size=9,part='all') %>% set_header_df(mapping=ftab.header,key="out") %>% theme_box() %>% merge_v(part='header') %>% merge_h(part="header") %>% align(align='center',part='all') %>% set_caption('Unadjusted prevalence of healthcare-associated infections (HAI) in control and intervention phases, by ward')
+
+
+```
+
+
+```{r}
+ftab.hai_bytype = NULL
+ftab.hai_bytype[['All HAIs']]= hai_desc_summary(invar='ward',choose.level = 1:10,outcome='total_hai_all')
+ftab.hai_bytype[['All HAIs excluding EENT']] = hai_desc_summary(invar='ward',choose.level = 1:10,outcome='total_hai_all_no_eent')
+ftab.hai_bytype[['All HAIs excluding COVID-19']] = hai_desc_summary(invar='ward',choose.level = 1:10,outcome='total_hai_all_no_covid')
+
+ftab.hai_bytype[['UTI']] = hai_desc_summary(invar='ward',choose.level = 1:10,outcome='total_hai_uti')
+ftab.hai_bytype[['Pneumonia']] = hai_desc_summary(invar='ward',choose.level = 1:10,outcome='total_hai_pn')
+ftab.hai_bytype[['SSI']] = hai_desc_summary(invar='ward',choose.level = 1:10,outcome='total_hai_ssi')
+ftab.hai_bytype[['BSI']] = hai_desc_summary(invar='ward',choose.level = 1:10,outcome='total_hai_bsi')
+ftab.hai_bytype[['UTI/PN/SSI/BSI combined']] = hai_desc_summary(invar='ward',choose.level = 1:10,outcome='total_hai_bsi_pn_uti_ssi')
+
+
+ftab.hai_bytype[['EENT']] = hai_desc_summary(invar='ward',choose.level = 1:10,outcome='total_hai_eent')
+ftab.hai_bytype[['EENT excluding COVID-19']] = hai_desc_summary(invar='ward',choose.level = 1:10,outcome='total_hai_eent_no_covid')
+ftab.hai_bytype[['Bone']] = hai_desc_summary(invar='ward',choose.level = 1:10,outcome='total_hai_bj')
+ftab.hai_bytype[['CNS']] = hai_desc_summary(invar='ward',choose.level = 1:10,outcome='total_hai_cns')
+ftab.hai_bytype[['CRI']] = hai_desc_summary(invar='ward',choose.level = 1:10,outcome='total_hai_cri')
+ftab.hai_bytype[['CVS']] = hai_desc_summary(invar='ward',choose.level = 1:10,outcome='total_hai_cvs')
+ftab.hai_bytype[['GI']] = hai_desc_summary(invar='ward',choose.level = 1:10,outcome='total_hai_gi')
+ftab.hai_bytype[['GI CDI']] = hai_desc_summary(invar='ward',choose.level = 1:10,outcome='total_hai_gi_cdi')
+ftab.hai_bytype[['LRI']] = hai_desc_summary(invar='ward',choose.level = 1:10,outcome='total_hai_lri')
+ftab.hai_bytype[['SST']] = hai_desc_summary(invar='ward',choose.level = 1:10,outcome='total_hai_sst')
+ftab.hai_bytype[['SYS']] = hai_desc_summary(invar='ward',choose.level = 1:10,outcome='total_hai_sys')
+
+ftab.hai_bytype = ftab.hai_bytype %>% bind_rows(.id='HAI type')
+
+ftab.hai_bytype %>% flextable()  %>% width(width=c(1,0.8,0.8,1.1,0.8,0.8,1.1)) %>% fontsize(size=9,part='all') %>% set_header_df(mapping=ftab.header,key="out") %>% theme_box() %>% merge_v(part='header') %>% merge_h(part="header") %>% align(align='center',part='all') %>% set_caption('Cases and  prevalence of confirmed healthcare-associated infection (HAI) by HAI type: Control versus Intervention')
+```
+
+# Primary outcome analysis
+
+```{r}
+load('output/bootstrap_primary_outcome.rda')
+
+phase_effect= NULL
+phase_effect[['All HAIs']] = mod_all_hais$boot_output %>% data.frame() %>% mutate(absdiff=X2-X1,pchange=(X2-X1)/X1,or=exp(Estimate)) %>% summarise(across(everything(),list(avg=mean,ci.low=~quantile(.,.025),ci.high=~quantile(.,.975)))) 
+phase_effect[['All HAIs excluding EENT']] = mod_all_hais_noeent$boot_output %>% data.frame() %>% mutate(absdiff=X2-X1,pchange=(X2-X1)/X1,or=exp(Estimate)) %>% summarise(across(everything(),list(avg=mean,ci.low=~quantile(.,.025),ci.high=~quantile(.,.975)))) 
+phase_effect[['All HAIs excluding COVID-19']] = mod_all_hais_nocovid$boot_output %>% data.frame() %>% mutate(absdiff=X2-X1,pchange=(X2-X1)/X1,or=exp(Estimate)) %>% summarise(across(everything(),list(avg=mean,ci.low=~quantile(.,.025),ci.high=~quantile(.,.975))))  
+phase_effect[['BSI, PN, UTI and SSI']]=mod_all_hais_sub$boot_output %>% data.frame() %>% mutate(absdiff=X2-X1,pchange=(X2-X1)/X1,or=exp(Estimate)) %>% summarise(across(everything(),list(avg=mean,ci.low=~quantile(.,.025),ci.high=~quantile(.,.975)))) 
+phase_effect = bind_rows(phase_effect,.id='Outcome') %>% pivot_longer(cols=-Outcome) %>% separate(col=name,into=c('phase','stat'),sep='_') %>% mutate_at('phase',~case_when(.=='X1' ~ 'Control',.=='X2'~'Intervention',.=='Estimate'~'log OR',.=='or' ~ 'OR',.=='absdiff'~'Absolute Difference',.=='pchange'~'Relative Difference')) %>% filter(!is.na(phase))
+ftab_phase = phase_effect %>% spread(stat,value) %>% mutate(cell=ifelse(!phase %in% c('log OR','OR'),paste0(roundz(100*avg,2),'\n(',roundz(100*ci.low,2),' to ',roundz(100*ci.high,2),')'),paste0(roundz(avg,2),'\n(',roundz(ci.low,2),' to ',roundz(ci.high,2),')'))) %>% select(Outcome,phase,cell) %>% spread(phase,cell) %>% select(Outcome,Control,Intervention,`OR`,`Absolute Difference`,`Relative Difference`)
+
+#update p-values to 2 significant figures or <0.0001 (R1); bootstrapped output applied p<0.001
+phase_p = NULL
+phase_p[['All HAIs']] = data.frame('p-value'=summary(mod_all_hais$mod.fit)$coefficients['phase','Pr(>|z|)'])
+phase_p[['All HAIs excluding EENT']] =data.frame('p-value'=summary(mod_all_hais_noeent$mod.fit)$coefficients['phase','Pr(>|z|)'])
+phase_p[['All HAIs excluding COVID-19']] = data.frame('p-value'=summary(mod_all_hais_nocovid$mod.fit)$coefficients['phase','Pr(>|z|)'])
+phase_p[['BSI, PN, UTI and SSI']] = data.frame('p-value'=summary(mod_all_hais_sub$mod.fit)$coefficients['phase','Pr(>|z|)'])
+phase_p = bind_rows(phase_p,.id='Outcome') %>% mutate_at('p.value',~ifelse(.<0.0001,'<0.0001',roundz(.,5)))
+
+ftab_phase = ftab_phase %>% left_join(phase_p,by='Outcome')
+
+ftab_phase %>% flextable() %>% theme_box() %>% fontsize(size=10,part='all') %>%  set_caption('Estimated changes in healthcare-associated infections (HAIs) attributable to the intervention.: Model-based bootstrap results, showing predicted prevalence (%) by study phase (Control, Intervention), the Odds Ratio for the intervention (OR) and the absolute and relative % differences in prevalence (Intervention - Control), after accounting for clustering (ward-level random intercept) and secular time trends (categorical fixed effect)') %>% width(width=c(1.5,1.3,1.3,1.3,1.3,1.3,0.6)) 
+```
+
+```{r hai-predicted-trends-all,fig.cap='Predicted healthcare-associated infection (HAI) prevalence (%) in weeks since intervention exposure, for different HAIs. EENT = Ear, eyes, nose, throat or mouth infection, BSI = Bloodstream infection, PN = Pneumonia, UTI = Urinary tract infection, SSI = Surgical site infection.',fig.height=10,fig.width=10}
+
+ad = filter(cluster_time_mapping,phase==1) %>% group_by(ward) %>% slice_min(data_collection_period) %>% ungroup() %>% select(ward,data_collection_period) %>% rename('int_start_period'=data_collection_period) %>% mutate_at('ward',~factor(.,levels=1:10))
+dat_primary = dat_primary %>% left_join(ad,by='ward') %>% mutate('time_since_intervention'=as.numeric(data_collection_period)-int_start_period)
+
+observed_pps_results = dat_primary %>% select(ward,time_since_intervention,n_surveys,starts_with('total_hai_all'),total_hai_bsi_pn_uti_ssi) %>% pivot_longer(cols=starts_with('total_'),names_to='Outcome',values_to='cases') %>% mutate_at('Outcome',~recode(.,total_hai_all = "All HAIs",total_hai_all_no_eent = 'All HAIs excluding EENT',total_hai_all_no_covid = "All HAIs excluding COVID-19",total_hai_bsi_pn_uti_ssi = "BSI, PN, UTI and SSI")) %>% mutate(perc = 100*cases/n_surveys)
+
+pred_phase = phase_effect %>% spread(stat,value) %>% filter(phase %in% c('Control','Intervention')) %>% 
+  mutate(time_since_intervention = case_when(phase=='Control' ~ list(seq(-16,0,4)),phase=='Intervention'~list(seq(0,16,4)))) %>% unnest(cols=time_since_intervention) %>% mutate(perc=100*avg)
+
+ggplot(observed_pps_results,aes(x=time_since_intervention,y=perc))+geom_point(alpha=0.4,aes(colour=Outcome))+geom_vline(aes(xintercept=0),linetype='dashed')+
+  geom_line(data=pred_phase,aes(colour=Outcome)) + geom_ribbon(data=pred_phase,aes(ymin=100*ci.low,ymax=100*ci.high,fill=Outcome),alpha=0.3)+
+facet_wrap(~Outcome,nrow=2,ncol=2)+scale_x_continuous('Data collection period, relative to first intervention PPS',breaks=seq(-16,16,4))+scale_y_continuous('Ward-level point prevalence (%)',breaks=seq(0,50,5))+scale_fill_manual(values=cbPalette)+scale_color_manual(values=cbPalette)+g.theme+theme(strip.text = element_text(size=12))
+
+
+```
+
+
+```{r,fig.cap='. Predicted secular trends for primary outcome (all HAI) and sub-groups. HAI = Healthcare-associated infection, EENT = Ears, eyes, nose, throat or mouth infection, BSI = Bloodstream infection, PN = Pneumonia, UTI = Urinary tract infection, SSI = Surgical site infection',fig.height=8,fig.width=10}
+#all hais
+
+time_effect = bind_rows(list('All HAIs'= mod_all_hais$time_effect,'All HAIs excluding EENT'=mod_all_hais_noeent$time_effect,'All HAIs excluding COVID-19'=mod_all_hais_nocovid$time_effect,'BSI, PN, UTI and SSI'=mod_all_hais_sub$time_effect),.id='Outcome')
+
+ggplot(time_effect,aes(x=x,y=100*predicted,ymin=100*conf.low,ymax=100*conf.high,group=Outcome,colour=Outcome))+geom_point(position = position_dodge(.4))+geom_errorbar(width=.5,position = position_dodge(.4))+ scale_y_continuous('Predicted HAI prevalence (%)',breaks=seq(0,40,5))+scale_x_discrete('Data collection period')+g.theme+scale_color_manual(values=cbPalette)
+
+
+```
+
+
+```{r,fig.cap='Ward random effects of primary outcome (all HAIs) and subgroups. HAI = Healthcare-associated infection, EENT = Ears, eyes, nose, throat or mouth infection, BSI = Bloodstream infection, PN = Pneumonia, UTI = Urinary tract infection, SSI = Surgical site infection, Cl = Confidence interval.',fig.height=10,fig.width=10}
+random_effect = bind_rows(list('All HAIs'= mod_all_hais$rtab.mod,'All HAIs excluding EENT'=mod_all_hais_noeent$rtab.mod,'All HAIs excluding COVID-19'=mod_all_hais_nocovid$rtab.mod,'BSI, PN, UTI and SSI'=mod_all_hais_sub$rtab.mod),.id='Outcome') %>% mutate_at('ward',~factor(.,levels=1:10))
+
+ggplot(random_effect,aes(x=condval,xmin=conf.low,xmax=conf.high,y=ward,group=Outcome,colour=Outcome))+geom_point(position = position_dodge(.4))+geom_errorbar(width=.5,position = position_dodge(.4))+ geom_vline(aes(xintercept=0),linetype='dashed') +expand_limits(x=c(-1,1)) + scale_y_discrete('Ward')+scale_x_continuous('Random effect: Estimate (95% CI)',breaks=seq(-1,1,0.2))+g.theme+scale_color_manual(values=cbPalette)+
+  annotate('text',x=c(-0.7,0.7),y=c(1,1),label=c('Lower than\nbaseline average','Higher than\nbaseline average'))
+
+
+```
+
+
+```{r}
+#identity link
+mod.fit_all = lmer(total_hai_all/n_surveys ~ phase + data_collection_period + (1|ward),data=dat_primary)
+mod.fit_all_noeent = lmer(total_hai_all_no_eent/n_surveys ~ phase + data_collection_period + (1|ward),data=dat_primary)
+mod.fit_all_nocovid = lmer(total_hai_all_no_covid/n_surveys ~ phase + data_collection_period + (1|ward),data=dat_primary)
+mod.fit_all_sub = lmer(total_hai_bsi_pn_uti_ssi/n_surveys ~ phase + data_collection_period + (1|ward),data=dat_primary)
+
+icc.fit = NULL
+
+icc.fit[['All HAIs']] = mod.fit_all %>% VarCorr() %>% data.frame() 
+icc.fit[['All HAIs excluding EENT']] = mod.fit_all_noeent %>% VarCorr() %>% data.frame() 
+icc.fit[['All HAIs excluding COVID-19']] = mod.fit_all_nocovid %>% VarCorr() %>% data.frame() 
+icc.fit[['BSI, PN, UTI and SSI combined']] = mod.fit_all_sub %>% VarCorr() %>% data.frame() 
+ftab_log_icc =bind_rows(icc.fit,.id='Outcome') %>% select(Outcome,grp,vcov) %>% spread(grp,vcov) %>% mutate(ICC=roundz(ward/(ward+Residual),2)) %>% select(Outcome,ICC)
+
+
+ftab_log_icc %>% flextable() %>% theme_box() %>% width(width=c(2,1)) %>% set_caption('Estimated intraclass correlation coefficients (ICCs)')
+
+```
+
+
+## Sensitivity analysis
+
+### Leave one ward out analysis
+
+
+```{r}
+ftab_loo = NULL
+#All HAIS
+mod_loo = lapply(1:10,function(x) fit_glmm_hai(indat = filter(dat_primary,ward!=x)))
+ftab_loo[['All HAIs']] = lapply(mod_loo,function(x) x$ftab.mod) %>% bind_rows(.id='Ward excluded') %>% filter(Parameter=='Intervention exposure') %>% mutate(stat = paste0(`OR (95% CI)`,'\n',`p-value`)) %>% select(`Ward excluded`,stat) 
+
+#All HAIs excluding eent
+mod_loo = lapply(1:10,function(x) fit_glmm_hai(indat = filter(dat_primary,ward!=x),y='total_hai_all_no_eent'))
+ftab_loo[['All HAIs excluding EENT']] = lapply(mod_loo,function(x) x$ftab.mod) %>% bind_rows(.id='Ward excluded') %>% filter(Parameter=='Intervention exposure') %>% mutate(stat = paste0(`OR (95% CI)`,'\n',`p-value`)) %>% select(`Ward excluded`,stat) 
+
+#All HAIs excluding covid19
+mod_loo = lapply(1:10,function(x) fit_glmm_hai(indat = filter(dat_primary,ward!=x),y='total_hai_all_no_covid')) 
+ftab_loo[['All HAIs excluding COVID-19']] = lapply(mod_loo,function(x) x$ftab.mod) %>% bind_rows(.id='Ward excluded') %>% filter(Parameter=='Intervention exposure') %>% mutate(stat = paste0(`OR (95% CI)`,'\n',`p-value`)) %>% select(`Ward excluded`,stat) 
+
+#BSI/PN/UTI/SSI
+mod_loo = lapply(1:10,function(x) fit_glmm_hai(indat = filter(dat_primary,ward!=x),y='total_hai_bsi_pn_uti_ssi'))
+ftab_loo[['BSI, PN, UTI and SSI']] = lapply(mod_loo,function(x) x$ftab.mod) %>% bind_rows(.id='Ward excluded') %>% filter(Parameter=='Intervention exposure') %>% mutate(stat = paste0(`OR (95% CI)`,'\n',`p-value`)) %>% select(`Ward excluded`,stat)
+
+ftab_loo = bind_rows(ftab_loo,.id='outcome') %>% pivot_wider(names_from=outcome,values_from=stat)
+
+ftab_loo %>% flextable() %>% theme_box() %>% width(width=c(1,1.5,1.5,1.5,1.5)) %>% set_caption('Leave one ward out analysis: Odds ratios (95% CI) and p-values for intervention exposure are given for each excluded ward.')
+
+
+```
+
+
+### Delayed intervention effect
+
+```{r}
+load('output/bootstrap_primary_outcome_int_delay_w.rda')
+phase_effect= NULL
+
+phase_effect[['All HAIs: 2 week delay']] =mod_all_hais_2wk_delay_w$boot_output %>% data.frame() %>% mutate(absdiff=X2-X1,pchange=(X2-X1)/X1,or=exp(Estimate)) %>% summarise(across(everything(),list(avg=mean,ci.low=~quantile(.,.025),ci.high=~quantile(.,.975)))) 
+phase_effect[['All HAIs: 4 week delay']] =mod_all_hais_4wk_delay_w$boot_output %>% data.frame() %>% mutate(absdiff=X2-X1,pchange=(X2-X1)/X1,or=exp(Estimate)) %>% summarise(across(everything(),list(avg=mean,ci.low=~quantile(.,.025),ci.high=~quantile(.,.975)))) 
+
+phase_effect[['All HAIs excluding EENT: 2 week delay']] = mod_all_hais_noeent_2wk_delay_w$boot_output %>% data.frame() %>% mutate(absdiff=X2-X1,pchange=(X2-X1)/X1,or=exp(Estimate)) %>% summarise(across(everything(),list(avg=mean,ci.low=~quantile(.,.025),ci.high=~quantile(.,.975)))) 
+phase_effect[['All HAIs excluding EENT: 4 week delay']] = mod_all_hais_noeent_4wk_delay_w$boot_output %>% data.frame() %>% mutate(absdiff=X2-X1,pchange=(X2-X1)/X1,or=exp(Estimate)) %>% summarise(across(everything(),list(avg=mean,ci.low=~quantile(.,.025),ci.high=~quantile(.,.975)))) 
+
+phase_effect[['All HAIs excluding COVID-19: 2 week delay']] = mod_all_hais_nocovid_2wk_delay_w$boot_output %>% data.frame() %>% mutate(absdiff=X2-X1,pchange=(X2-X1)/X1,or=exp(Estimate)) %>% summarise(across(everything(),list(avg=mean,ci.low=~quantile(.,.025),ci.high=~quantile(.,.975)))) 
+phase_effect[['All HAIs excluding COVID-19: 4 week delay']] = mod_all_hais_nocovid_4wk_delay_w$boot_output %>% data.frame() %>% mutate(absdiff=X2-X1,pchange=(X2-X1)/X1,or=exp(Estimate)) %>% summarise(across(everything(),list(avg=mean,ci.low=~quantile(.,.025),ci.high=~quantile(.,.975)))) 
+
+phase_effect[['BSI, PN, UTI and SSI: 2 week delay']]=mod_all_hais_sub_2wk_delay_w$boot_output %>% data.frame() %>% mutate(absdiff=X2-X1,pchange=(X2-X1)/X1,or=exp(Estimate)) %>% summarise(across(everything(),list(avg=mean,ci.low=~quantile(.,.025),ci.high=~quantile(.,.975)))) 
+phase_effect[['BSI, PN, UTI and SSI: 4 week delay']]=mod_all_hais_sub_4wk_delay_w$boot_output %>% data.frame() %>% mutate(absdiff=X2-X1,pchange=(X2-X1)/X1,or=exp(Estimate)) %>% summarise(across(everything(),list(avg=mean,ci.low=~quantile(.,.025),ci.high=~quantile(.,.975)))) 
+
+phase_effect = bind_rows(phase_effect,.id='Outcome: Intervention delay') %>% pivot_longer(cols=-`Outcome: Intervention delay`) %>% separate(col=name,into=c('phase','stat'),sep='_') %>% mutate_at('phase',~case_when(.=='X1' ~ 'Control',.=='X2'~'Intervention',.=='Estimate'~'log OR',.=='or' ~ 'OR',.=='absdiff'~'Absolute Difference',.=='pchange'~'Relative Difference')) %>% filter(!is.na(phase))
+
+ftab_phase_delay = phase_effect %>% spread(stat,value) %>% mutate(cell=ifelse(!phase %in% c('log OR','OR'),paste0(roundz(100*avg,2),'\n(',roundz(100*ci.low,2),' to ',roundz(100*ci.high,2),')'),paste0(roundz(avg,2),'\n(',roundz(ci.low,2),' to ',roundz(ci.high,2),')'))) %>% select(`Outcome: Intervention delay`,phase,cell) %>% spread(phase,cell) %>% select(`Outcome: Intervention delay`,`OR`,,Control,Intervention,`Absolute Difference`,`Relative Difference`) %>% separate(col=`Outcome: Intervention delay`,into=c('Outcome','Intervention exposure'),sep=': ')
+
+
+
+ftab_phase_delay %>% flextable() %>% merge_v(j = 'Outcome') %>% theme_box() %>% fontsize(size=10,part='all') %>% width(width=c(1,1,1.2,1.2,1,1.2,1.2)) %>% set_caption('Estimated odds ratios (OR) and percentage differences related to Intervention exposure, assuming a 2-week and 4-week delay. Data collection periods affected by delays were treated as a washout period')
+
+
+```
+
+
+### Assessing overdispersion
+
+```{r}
+ftab_all = NULL
+ftab_all[['All HAIs']] = mod_all_hais$ftab.mod
+ftab_all[['All HAIs excluding EENT']] = mod_all_hais_noeent$ftab.mod
+ftab_all[['All HAIs excluding COVID-19']] = mod_all_hais_nocovid$ftab.mod
+ftab_all[['BSI, PN, UTI and SSI combined']] = mod_all_hais_sub$ftab.mod
+
+ftab_all = bind_rows(ftab_all,.id='Outcome') %>% filter(Parameter=='Intervention exposure') %>% select(Outcome,`OR (95% CI)`,`% change in odds (95% CI)`,`p-value`) %>% rename('Odds ratio (95% CI)'=`OR (95% CI)`)
+
+#add logLik
+ll = NULL
+ll[['All HAIs']] = roundz(summary(mod_all_hais$mod.fit)$AICtab['logLik'],1)
+ll[['All HAIs excluding EENT']] = roundz(summary(mod_all_hais_noeent$mod.fit)$AICtab['logLik'],1)
+ll[['All HAIs excluding COVID-19']] = roundz(summary(mod_all_hais_nocovid$mod.fit)$AICtab['logLik'],1)
+ll[['BSI, PN, UTI and SSI combined']] = roundz(summary(mod_all_hais_sub$mod.fit)$AICtab['logLik'],1)
+
+ll = bind_rows(ll) %>% gather(Outcome,logLik)
+
+
+#R1 update significant figures on 
+pval=NULL
+
+pval[['All HAIs']] = data.frame('p-value'=summary(mod_all_hais$mod.fit)$coefficient['phase','Pr(>|z|)'])
+pval[['All HAIs excluding COVID-19']] = data.frame('p-value'=summary(mod_all_hais_nocovid$mod.fit)$coefficient['phase','Pr(>|z|)'])
+pval[['All HAIs excluding EENT']] = data.frame('p-value'=summary(mod_all_hais_noeent$mod.fit)$coefficient['phase','Pr(>|z|)'])
+pval[['BSI, PN, UTI and SSI combined']] = data.frame('p-value'=summary(mod_all_hais_sub$mod.fit)$coefficient['phase','Pr(>|z|)'])
+
+pval = bind_rows(pval,.id='Outcome')
+
+ftab_all = ftab_all %>% left_join(ll,by=join_by(Outcome)) %>% left_join(pval,by='Outcome') %>% select(-`p-value`) %>% rename('p-value'=p.value) %>% mutate_at('p-value',~ifelse(.<0.00001,'<0.00001',roundz(.,5)))
+
+
+dat_primary = dat_primary %>% mutate(idx = row_number())
+
+mod_all_hais_o = fit_glmm_hai(mod.form = '~(1|ward/idx)+data_collection_period+phase')
+mod_all_hais_noeent_o = fit_glmm_hai(y='total_hai_all_no_eent',mod.form = '~(1|ward/idx)+data_collection_period+phase')
+mod_all_hais_nocovid_o = fit_glmm_hai(y='total_hai_all_no_covid',mod.form = '~(1|ward/idx)+data_collection_period+phase')
+mod_all_hais_sub_o = fit_glmm_hai(y='total_hai_bsi_pn_uti_ssi',mod.form = '~(1|ward/idx)+data_collection_period+phase')
+
+
+ftab_all_s = NULL
+
+ftab_all_s[['All HAIs']] = mod_all_hais_o$ftab.mod
+ftab_all_s[['All HAIs excluding EENT']] = mod_all_hais_noeent_o$ftab.mod
+ftab_all_s[['All HAIs excluding COVID-19']] = mod_all_hais_nocovid_o$ftab.mod
+ftab_all_s[['BSI, PN, UTI and SSI combined']] = mod_all_hais_sub_o$ftab.mod
+
+ftab_all_s = bind_rows(ftab_all_s,.id='Outcome') %>% filter(Parameter=='Intervention exposure') %>% select(Outcome,`OR (95% CI)`,`% change in odds (95% CI)`,`p-value`) %>% rename('Odds ratio (95% CI)'=`OR (95% CI)`)
+
+#add logLik
+ll = NULL
+ll[['All HAIs']] = roundz(summary(mod_all_hais_o$mod.fit)$AICtab['logLik'],1)
+ll[['All HAIs excluding EENT']] = roundz(summary(mod_all_hais_noeent_o$mod.fit)$AICtab['logLik'],1)
+ll[['All HAIs excluding COVID-19']] = roundz(summary(mod_all_hais_nocovid_o$mod.fit)$AICtab['logLik'],1)
+ll[['BSI, PN, UTI and SSI combined']] = roundz(summary(mod_all_hais_sub_o$mod.fit)$AICtab['logLik'],1)
+
+ll = bind_rows(ll) %>% gather(Outcome,logLik)
+
+ftab_all_s = ftab_all_s %>% left_join(ll,by=join_by(Outcome))
+
+
+
+ftab_all_1 = bind_rows(list("Main analysis"=ftab_all,"Overdispersion accounted for"=ftab_all_s),.id='Analysis') %>% arrange(Outcome) %>% select(Outcome,everything())
+
+ftab_all_1 %>% flextable() %>% merge_v(j = 'Outcome') %>% theme_box() %>% width(width=c(1.4,1.4,1.4,1.4,0.7,0.7)) %>% set_caption('Estimated odds ratios (OR): Intervention exposure before and after accounting for possible overdispersion. Results are presented as Odds ratios (95% CI) with p-values and model log-likelihood to summarise goodness of fit. Higher values for logLik indicate improved model fit.')
+
+```
+
+### Different link functions
+
+```{r}
+#log-link
+mod.fit_all = glmer(total_hai_all ~ phase + data_collection_period + (1|ward) + offset(log(n_surveys)),data=dat_primary,family = poisson('log'))
+mod.fit_all_noeent = glmer(total_hai_all_no_eent ~ phase + data_collection_period + (1|ward) + offset(log(n_surveys)),data=dat_primary,family = poisson('log'))
+mod.fit_all_nocovid = glmer(total_hai_all_no_covid ~ phase + data_collection_period + (1|ward) + offset(log(n_surveys)),data=dat_primary,family = poisson('log'))
+mod.fit_all_sub = glmer(total_hai_bsi_pn_uti_ssi ~ phase + data_collection_period + (1|ward) + offset(log(n_surveys)),data=dat_primary,family = poisson('log'))
+ftab_all <- NULL
+ftab_all[['Poisson (log)']][['All HAIs']] = summarise_glmm(mod.fit = mod.fit_all,est.label = 'Relative risk (95% CI)')
+ftab_all[['Poisson (log)']][['All HAIs excluding EENT']] = summarise_glmm(mod.fit = mod.fit_all_noeent,est.label = 'Relative risk (95% CI)')
+ftab_all[['Poisson (log)']][['All HAIs excluding COVID-19']] = summarise_glmm(mod.fit = mod.fit_all_nocovid,est.label = 'Relative risk (95% CI)')
+ftab_all[['Poisson (log)']][['BSI, PN, UTI and SSI combined']] = summarise_glmm(mod.fit = mod.fit_all_sub,est.label = 'Relative risk (95% CI)')
+
+ftab_all[['Poisson (log)']] = bind_rows(ftab_all[['Poisson (log)']],.id='Outcome')
+
+#identity link
+mod.fit_all = lmer(total_hai_all/n_surveys ~ phase + data_collection_period + (1|ward),data=dat_primary)
+mod.fit_all_noeent = lmer(total_hai_all_no_eent/n_surveys ~ phase + data_collection_period + (1|ward),data=dat_primary)
+mod.fit_all_nocovid = lmer(total_hai_all_no_covid/n_surveys ~ phase + data_collection_period + (1|ward),data=dat_primary)
+mod.fit_all_sub = lmer(total_hai_bsi_pn_uti_ssi/n_surveys ~ phase + data_collection_period + (1|ward),data=dat_primary)
+
+ftab_all[['Normal (identity)']][['All HAIs']] = summarise_glmm(mod.fit = mod.fit_all,est.label = 'Risk difference (95% CI)')
+ftab_all[['Normal (identity)']][['All HAIs excluding EENT']] = summarise_glmm(mod.fit = mod.fit_all_noeent,est.label = 'Risk difference (95% CI)')
+ftab_all[['Normal (identity)']][['All HAIs excluding COVID-19']] = summarise_glmm(mod.fit = mod.fit_all_nocovid,est.label = 'Risk difference (95% CI)')
+ftab_all[['Normal (identity)']][['BSI, PN, UTI and SSI combined']] = summarise_glmm(mod.fit = mod.fit_all_sub,est.label = 'Risk difference (95% CI)')
+
+ftab_all[['Normal (identity)']] = bind_rows(ftab_all[['Normal (identity)']],.id='Outcome')
+
+ftab_all = inner_join(ftab_all[[1]],ftab_all[[2]],by=c('Outcome','Parameter')) %>% filter(Parameter=='Intervention exposure') %>% select(Outcome,contains('risk'))
+
+ftab_all %>% flextable() %>% theme_box() %>% width(width=c(2,2,2)) %>% set_caption('Sensitivity analysis, GLMM link function: Poisson (Relative risk) and Normal (Risk difference)')
+
+
+```
+
+### By HAI type
+
+```{r}
+#categorical fixed effect for time
+mod_bsi = fit_glmm_hai(y='total_hai_bsi')
+mod_ssi = fit_glmm_hai(y='total_hai_ssi')
+mod_uti = fit_glm_hai(y='total_hai_uti')
+mod_pn = NULL  #fit_glm_hai(y='total_hai_pn') # complete separation errors thrown
+
+#linear effect for time
+dat_primary_1 = dat_primary %>% mutate_at('data_collection_period',~as.numeric(.)-1)
+#linear - no clustering
+mod_bsi_1 = fit_glmm_hai(y='total_hai_bsi',indat=dat_primary_1)
+mod_ssi_1 = fit_glmm_hai(y='total_hai_ssi',indat=dat_primary_1)
+mod_uti_1 = fit_glm_hai(y='total_hai_uti',indat=dat_primary_1)
+mod_pn_1 = fit_glmm_hai(y='total_hai_pn',indat=dat_primary_1)
+
+ftab_all = NULL
+ftab_all[['BSI']][['Categorical: Yes']] = mod_bsi$ftab.mod %>% add_column('AIC'=mod_bsi$aic.mod)
+ftab_all[['BSI']][['Linear: Yes']] = mod_bsi_1$ftab.mod %>% add_column('AIC'=mod_bsi_1$aic.mod)
+ftab_all[['BSI']] = bind_rows(ftab_all[['BSI']],.id='Study time effect')
+
+ftab_all[['SSI']][['Categorical: Yes']] = mod_ssi$ftab.mod %>% add_column('AIC'=mod_ssi$aic.mod)
+ftab_all[['SSI']][['Linear: Yes']] = mod_ssi_1$ftab.mod %>% add_column('AIC'=mod_ssi_1$aic.mod)
+ftab_all[['SSI']] = bind_rows(ftab_all[['SSI']],.id='Study time effect')
+
+
+ftab_all[['UTI']][['Categorical: No']] = mod_uti$ftab.mod %>% add_column('AIC'=mod_uti$aic.mod)
+ftab_all[['UTI']][['Linear: No']] = mod_uti_1$ftab.mod %>% add_column('AIC'=mod_uti_1$aic.mod)
+ftab_all[['UTI']] = bind_rows(ftab_all[['UTI']],.id='Study time effect')
+
+ftab_all[['PN']][['Linear: Yes']] = mod_pn_1$ftab.mod %>% add_column('AIC'='--')
+ftab_all[['PN']] = bind_rows(ftab_all[['PN']],.id='Study time effect')
+
+
+ftab_all = bind_rows(ftab_all,.id='Outcome') %>% filter(Parameter=='Intervention exposure') %>% select(Outcome,`Study time effect`,`OR (95% CI)`,`p-value`,AIC) %>% rename('Odds ratio (95% CI)'=`OR (95% CI)`) %>% mutate_at('AIC',~replace_na(.,'--')) %>% separate(col='Study time effect',into=c('Study time effect','Random effects\nincluded?'),sep=': ')
+
+ftab_all %>% flextable() %>% merge_v(j=c('Outcome','Random effects\nincluded?')) %>% theme_box() %>% width(width=c(1,1.5,1,1.7,.7,.5)) %>% set_caption('Estimated odds ratios (OR): Intervention exposure')
+```
+
+```{r, fig.cap='Predicted secular trends by healthcare-associated infection (HAI) type',fig.height=10,fig.width=12}
+#categorical first
+time_effect = bind_rows(list('BSI'=mod_bsi$time_effect,'SSI'=mod_ssi$time_effect,'UTI'=mod_uti$time_effect),.id='Outcome')
+time_effect_1 = bind_rows(list('BSI'=mod_bsi_1$time_effect,'SSI'=mod_ssi_1$time_effect,'UTI'=mod_uti_1$time_effect,'PN'=mod_pn_1$time_effect),.id='Outcome') %>% mutate_at('Outcome',~factor(.,levels=c('BSI','SSI','UTI','PN')))
+
+
+g1 = ggplot(time_effect,aes(x=x,y=100*predicted,ymin=100*conf.low,ymax=100*conf.high,group=Outcome,colour=Outcome))+geom_point(position = position_dodge(.4))+geom_errorbar(width=.5,position = position_dodge(.4))+ facet_grid(Outcome~.)+scale_y_continuous('Predicted HAI prevalence (%)',breaks=seq(0,10,1))+scale_x_discrete('Data collection period')+g.theme+scale_color_manual(values=cbPalette)+ggtitle("Study time effect: Categorical")+theme(legend.position = 'none')
+
+
+g2 = ggplot(time_effect_1,aes(x=x+1,y=100*predicted,ymin=100*conf.low,ymax=100*conf.high,group=Outcome,colour=Outcome))+geom_point(position = position_dodge(.4))+geom_errorbar(width=.5,position = position_dodge(.4))+ facet_grid(Outcome~.)+scale_y_continuous('Predicted HAI prevalence (%)',breaks=seq(0,10,1))+scale_x_continuous('Data collection period',breaks=1:18)+g.theme+scale_color_manual(values=cbPalette)+ggtitle("Study time effect: Linear")+theme(legend.position = 'none')
+
+ggpubr::ggarrange(g1,g2,nrow=1,ncol=2,heights=c(1,2))
+
+
+```
+
+```{r ward-random-effect-bsi-ssi,fig.cap='Ward random effects by HAI type: BSI, PN, SSI. Note that ward-level random effects were not included for UTI due to model convergence issues',fig.height=10,fig.width=10}
+random_effect = bind_rows(list('BSI'= mod_bsi$rtab.mod,'SSI'=mod_ssi$rtab.mod),.id='Outcome') %>% mutate_at('ward',~factor(.,levels=1:10))
+
+random_effect_1 = bind_rows(list('BSI'= mod_bsi_1$rtab.mod,'SSI'=mod_ssi_1$rtab.mod,'UTI'=mod_uti_1$rtab.mod,'PN'=mod_pn_1$rtab.mod),.id='Outcome') %>% mutate_at('ward',~factor(.,levels=1:10))                          
+
+to_plot = bind_rows(list('Categorical'=random_effect,'Linear'=random_effect_1),.id='Study time effect')
+
+ggplot(to_plot,aes(x=condval,xmin=conf.low,xmax=conf.high,y=ward,group=Outcome,colour=Outcome))+geom_point(position = position_dodge(.4))+geom_errorbar(width=.5,position = position_dodge(.4))+ geom_vline(aes(xintercept=0),linetype='dashed')+facet_grid(~`Study time effect`) +expand_limits(x=c(-3,3)) + scale_y_discrete('Ward')+scale_x_continuous('Random effect: Estimate (95% CI)',breaks=seq(-3,3,0.5))+g.theme+scale_color_manual(values=cbPalette[c(1,4,2)])
+
+
+```
